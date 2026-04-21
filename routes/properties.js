@@ -4,6 +4,7 @@ const Property = require('../models/Property');
 const auth = require('../middleware/auth');
 const redisClient = require('../utils/redis');
 const Counter = require('../models/Counter');
+const pagination = require('../middleware/pagination');
 
 // Get next sequence number for property ID
 const getNextSequence = async (name) => {
@@ -35,9 +36,52 @@ const getNextSequence = async (name) => {
  *         name: maxPrice
  *         schema:
  *           type: number
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *           minimum: 1
+ *         description: Page number for pagination
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *           minimum: 1
+ *           maximum: 100
+ *         description: Number of items per page
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           default: createdAt
+ *         description: Field to sort by
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *           default: desc
+ *         description: Sort order (asc or desc)
  *     responses:
  *       200:
- *         description: List of properties
+ *         description: List of properties with pagination metadata
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 properties:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Property'
+ *                 total:
+ *                   type: integer
+ *                 page:
+ *                   type: integer
+ *                 totalPages:
+ *                   type: integer
  *   post:
  *     tags:
  *       - Properties
@@ -85,7 +129,7 @@ router.post('/', auth, async (req, res) => {
 });
 
 // Get all properties with advanced search
-router.get('/', async (req, res) => {
+router.get('/', pagination, async (req, res) => {
     try {
         const {
             search,
@@ -105,10 +149,10 @@ router.get('/', async (req, res) => {
             isVerified,
             tags,
             availableFrom,
-            sortBy = 'createdAt',
-            sortOrder = 'desc',
-            page = 1,
-            limit = 10
+            sortBy,
+            sortOrder,
+            page,
+            limit
         } = req.query;
 
         // Build query

@@ -5,6 +5,7 @@ const Property = require('../models/Property');
 const Recommendation = require('../models/Recommendation');
 const auth = require('../middleware/auth');
 const redisClient = require('../utils/redis');
+const pagination = require('../middleware/pagination');
 
 /**
  * @openapi
@@ -17,7 +18,33 @@ const redisClient = require('../utils/redis');
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: List of received recommendations
+ *         description: List of received recommendations with pagination
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 recommendations:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                 total:
+ *                   type: integer
+ *                 page:
+ *                   type: integer
+ *                 totalPages:
+ *                   type: integer
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
  * /api/recommendations/send:
  *   post:
  *     tags:
@@ -43,21 +70,36 @@ const redisClient = require('../utils/redis');
  *         description: Recommendation sent
  */
 // Search for users by email
-router.get('/search-users', auth, async (req, res) => {
+router.get('/search-users', auth, pagination, async (req, res) => {
     try {
-        const { email } = req.query;
+        const { email, page, limit } = req.query;
+        const skip = (page - 1) * limit;
         
         if (!email) {
             return res.status(400).json({ message: 'Email is required' });
         }
 
         // Search for users by email (excluding current user)
-        const users = await User.find({
-            email: { $regex: email, $options: 'i' },
-            _id: { $ne: req.user._id }
-        }).select('email listedBy');
+        const [users, total] = await Promise.all([
+            User.find({
+                email: { $regex: email, $options: 'i' },
+                _id: { $ne: req.user._id }
+            })
+            .select('email listedBy')
+            .skip(skip)
+            .limit(limit),
+            User.countDocuments({
+                email: { $regex: email, $options: 'i' },
+                _id: { $ne: req.user._id }
+            })
+        ]);
 
-        res.json(users);
+        res.json({
+            users,
+            total,
+            page,
+            totalPages: Math.ceil(total / limit)
+        });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -99,36 +141,67 @@ router.post('/send', auth, async (req, res) => {
 });
 
 // Get recommendations received by current user
-router.get('/received', auth, async (req, res) => {
-    const cacheKey = `recommendations:received:${req.user._id}`
+router.get('/received', auth, pagination, async (req, res) => {
     try {
+        const { page, limit } = req.query;
+        const skip = (page - 1) * limit;
+        const cacheKey = `recommendations:received:${req.user._id}:${page}:${limit}`;
+
         const cachedData = await redisClient.get(cacheKey);
         if (cachedData) {
             return res.json(JSON.parse(cachedData));
         }
-        // Fetch recommendations from the database
-        const recommendations = await Recommendation.find({ toUser: req.user._id })
-            .populate('fromUser', 'email listedBy')
-            .populate('property')
-            .sort({ createdAt: -1 });
 
-        // Cache the recommendations with a 5-minute expiration    
-        await redisClient.setEx(cacheKey, 300, JSON.stringify(recommendations));
-        res.json(recommendations);
+        // Fetch recommendations from the database with pagination
+        const [recommendations, total] = await Promise.all([
+            Recommendation.find({ toUser: req.user._id })
+                .populate('fromUser', 'email listedBy')
+                .populate('property')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit),
+            Recommendation.countDocuments({ toUser: req.user._id })
+        ]);
+
+        const result = {
+            recommendations,
+            total,
+            page,
+            totalPages: Math.ceil(total / limit)
+        };
+
+        // Cache the result with a 5-minute expiration    
+        await redisClient.setEx(cacheKey, 300, JSON.stringify(result));
+        res.json(result);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 });
 
 // Get recommendations sent by current user
-router.get('/sent', auth, async (req, res) => {
+router.get('/sent', auth, pagination, async (req, res) => {
     try {
-        const recommendations = await Recommendation.find({ fromUser: req.user._id })
-            .populate('toUser', 'email listedBy')
-            .populate('property')
-            .sort({ createdAt: -1 });
+        const { page, limit } = req.query;
+        const skip = (page - 1) * limit;
 
-        res.json(recommendations);
+        const [recommendations, total] = await Promise.all([
+            Recommendation.find({ fromUser: req.user._id })
+                .populate('toUser', 'email listedBy')
+                .populate('property')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit),
+            Recommendation.countDocuments({ fromUser: req.user._id })
+        ]);
+
+        const result = {
+            recommendations,
+            total,
+            page,
+            totalPages: Math.ceil(total / limit)
+        };
+
+        res.json(result);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }

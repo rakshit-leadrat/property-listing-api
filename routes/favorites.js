@@ -4,6 +4,7 @@ const User = require('../models/User');
 const Property = require('../models/Property');
 const auth = require('../middleware/auth');
 const redisClient = require('../utils/redis');
+const pagination = require('../middleware/pagination');
 
 /**
  * @openapi
@@ -16,7 +17,33 @@ const redisClient = require('../utils/redis');
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: List of favorite properties
+ *         description: List of favorite properties with pagination
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 favorites:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Property'
+ *                 total:
+ *                   type: integer
+ *                 page:
+ *                   type: integer
+ *                 totalPages:
+ *                   type: integer
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
  *   post:
  *     tags:
  *       - Favorites
@@ -33,11 +60,33 @@ const redisClient = require('../utils/redis');
  *         description: Property added to favorites
  */
 // Get user's favorites
-router.get('/', auth, async (req, res) => {
+router.get('/', auth, pagination, async (req, res) => {
     try {
-        const user = await User.findById(req.user._id).populate('favorites');
-        await redisClient.setEx(cacheKey, 300, JSON.stringify(user.favorites));
-        res.json(user.favorites);
+        const { page, limit } = req.query;
+        const skip = (page - 1) * limit;
+
+        const user = await User.findById(req.user._id);
+        const total = user.favorites.length;
+
+        const populatedUser = await User.findById(req.user._id)
+            .populate({
+                path: 'favorites',
+                options: {
+                    skip: skip,
+                    limit: limit
+                }
+            });
+
+        const result = {
+            favorites: populatedUser.favorites,
+            total,
+            page,
+            totalPages: Math.ceil(total / limit)
+        };
+
+        const cacheKey = `favorites:${req.user._id}:${page}:${limit}`;
+        await redisClient.setEx(cacheKey, 300, JSON.stringify(result));
+        res.json(result);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
