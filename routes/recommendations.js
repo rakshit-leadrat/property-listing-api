@@ -6,6 +6,42 @@ const Recommendation = require('../models/Recommendation');
 const auth = require('../middleware/auth');
 const redisClient = require('../utils/redis');
 
+/**
+ * @openapi
+ * /api/recommendations/received:
+ *   get:
+ *     tags:
+ *       - Recommendations
+ *     summary: Get recommendations received by current user
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of received recommendations
+ * /api/recommendations/send:
+ *   post:
+ *     tags:
+ *       - Recommendations
+ *     summary: Send property recommendation
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               propertyId:
+ *                 type: string
+ *               toUserId:
+ *                 type: string
+ *               message:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Recommendation sent
+ */
 // Search for users by email
 router.get('/search-users', auth, async (req, res) => {
     try {

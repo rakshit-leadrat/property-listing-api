@@ -15,6 +15,54 @@ const getNextSequence = async (name) => {
   return ret.seq;
 };
 
+/**
+ * @openapi
+ * /api/properties:
+ *   get:
+ *     tags:
+ *       - Properties
+ *     summary: Get all properties with advanced search
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: minPrice
+ *         schema:
+ *           type: number
+ *       - in: query
+ *         name: maxPrice
+ *         schema:
+ *           type: number
+ *     responses:
+ *       200:
+ *         description: List of properties
+ *   post:
+ *     tags:
+ *       - Properties
+ *     summary: Create a new property
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               price:
+ *                 type: number
+ *               type:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Property created
+ */
 // Create new property
 router.post('/', auth, async (req, res) => {
     try {

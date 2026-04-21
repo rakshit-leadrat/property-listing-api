@@ -5,6 +5,33 @@ const Property = require('../models/Property');
 const auth = require('../middleware/auth');
 const redisClient = require('../utils/redis');
 
+/**
+ * @openapi
+ * /api/favorites:
+ *   get:
+ *     tags:
+ *       - Favorites
+ *     summary: Get user's favorites
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of favorite properties
+ *   post:
+ *     tags:
+ *       - Favorites
+ *     summary: Add property to favorites
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: propertyId
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Property added to favorites
+ */
 // Get user's favorites
 router.get('/', auth, async (req, res) => {
     try {
